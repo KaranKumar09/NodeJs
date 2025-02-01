@@ -1,73 +1,47 @@
-const express = require('express');
-const {Pool} = require('pg');
+const express = require("express");
+const socketIO = require("socket.io");
+const path = require("path");
 
-const app=express();
-const port=4000;
-
-const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'todos',
-    password: 'root',
-    port: 5432,
+const app = express();
+const server = app.listen(3000, () => {
+  console.log("Server started on port 3000");
 });
 
-app.use(express.json());
+const io = socketIO(server);
 
-//Get all todos
-app.get('/todos', (req, res) => {
-    pool.query('SELECT * FROM todos', (error, result) => {
-        if (error){
-            console.error('Error fectching todos', error);
-            res.status(500).json({ error: 'Internal server error'});
-        }else{
-            res.json(result.rows);
-        }
+app.use(express.static(path.join(__dirname, "public"))); // Serve static files from 'public' directory
+
+const connectedUsers = {}; // Store connected users and their usernames
+
+io.on("connection", (socket) => {
+  console.log("A user connected to the server");
+
+  socket.on("join", (username) => {
+    connectedUsers[socket.id] = username;
+    socket.username = username;
+    io.emit("chat message", {
+      type: "notification",
+      message: `${username} has joined the chat`,
     });
-});
+  });
 
-app.post('/todos', (req,res)=>{
-    const { title, completed} = req.body;
-    pool.query('INSERT INTO todos (title, completed) VALUES ($1,$2)', [title, completed], (error) => {
-        if(error){
-            console.error('Error creating todo',error);
-            res.status(500).json({error:'Internal server error'});
-        }else{
-            res.status(201).json({message: "Todo created successfully"});
-        }
+  socket.on("chat message", (msg) => {
+    io.emit("chat message", {
+      type: "message",
+      username: socket.username,
+      message: msg,
     });
+  });
 
+  socket.on("disconnect", () => {
+    console.log("A user disconnected");
+    if (connectedUsers[socket.id]) {
+      const username = connectedUsers[socket.id];
+      delete connectedUsers[socket.id];
+      io.emit("chat message", {
+        type: "notification",
+        message: `${username} has left the chat`,
+      });
+    }
+  });
 });
-
-//Put update todos
-app.put('/todos/:id', (req, res) =>{
-    const { id} =req.params;
-    const {title, completed} = req.body;
-    pool.query('UPDATE todos SET title = $1, completed = $2 WHERE id=$3', [title, completed, id], (error) => {
-        if(error){
-            console.error('Error updating todo',error);
-            res.status(500).json({error:'Internal server error'});
-        }else{
-            res.json({message: "Todos updated successfully"});
-        }
-    });
-})
-
-app.delete('/todos/:id', (req,res)=>{
-    const {id} = req.params;
-    pool.query('DELETE FROM todos WHERE title = $1',[id], (error) => {
-        if(error){
-            console.error('Error creating todo',error);
-            res.status(500).json({error:'Internal server error'});
-        }else{
-            res.json({message: "Todo deleted successfully"});
-        }
-    });
-
-});
-
-app.listen(4000, ()=>{
-    console.log('Server is running.');
-});
-
-                                                
