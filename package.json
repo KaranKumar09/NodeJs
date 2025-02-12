@@ -1,5 +1,5 @@
 {
-  "name": "orm",
+  "name": "postgres",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -11,8 +11,6 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.19.2",
-    "pg": "^8.11.4",
-    "pg-hstore": "^2.3.4",
-    "sequelize": "^6.37.2"
+    "pg": "^8.11.3"
   }
 }
