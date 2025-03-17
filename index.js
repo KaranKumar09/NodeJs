@@ -1,73 +1,78 @@
 const express = require('express');
-const {Pool} = require('pg');
+const mongoose = require('mongoose');
+const path = require('path');
+require('dotenv').config();
 
-const app=express();
-const port=4000;
-
-const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'todos',
-    password: 'root',
-    port: 5432,
-});
+const app = express();
+const port = 4000;
 
 app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-//Get all todos
-app.get('/todos', (req, res) => {
-    pool.query('SELECT * FROM todos', (error, result) => {
-        if (error){
-            console.error('Error fectching todos', error);
-            res.status(500).json({ error: 'Internal server error'});
-        }else{
-            res.json(result.rows);
-        }
-    });
+const mongoURI = process.env.MONGO_URI;
+
+mongoose
+    .connect(mongoURI)
+    .then(() => console.log("Connected to MongoDB"))
+    .catch((err) => console.log("Error connecting to MongodB", err));
+
+const userSchema = new mongoose.Schema({
+    name:String,
+    email:String,
+    password:String
 });
 
-app.post('/todos', (req,res)=>{
-    const { title, completed} = req.body;
-    pool.query('INSERT INTO todos (title, completed) VALUES ($1,$2)', [title, completed], (error) => {
-        if(error){
-            console.error('Error creating todo',error);
-            res.status(500).json({error:'Internal server error'});
-        }else{
-            res.status(201).json({message: "Todo created successfully"});
-        }
-    });
+const User = mongoose.model('user',userSchema);
 
+app.get('/users',(req,res) => {
+    User.find({})
+        .then(users => res.json(users))
+        .catch(err => res.status(500).json({message:err.message}));
 });
 
-//Put update todos
-app.put('/todos/:id', (req, res) =>{
-    const { id} =req.params;
-    const {title, completed} = req.body;
-    pool.query('UPDATE todos SET title = $1, completed = $2 WHERE id=$3', [title, completed, id], (error) => {
-        if(error){
-            console.error('Error updating todo',error);
-            res.status(500).json({error:'Internal server error'});
-        }else{
-            res.json({message: "Todos updated successfully"});
-        }
-    });
-})
 
-app.delete('/todos/:id', (req,res)=>{
-    const {id} = req.params;
-    pool.query('DELETE FROM todos WHERE title = $1',[id], (error) => {
-        if(error){
-            console.error('Error creating todo',error);
-            res.status(500).json({error:'Internal server error'});
-        }else{
-            res.json({message: "Todo deleted successfully"});
-        }
+app.post('/users',(req,res) => {
+    const user = new User({
+        name: req.body.name,
+        email: req.body.email,
+        password: req.body.password
     });
-
+    user.save()
+        .then(newUser => res.status(201).json(newUser))
+        .catch(err => res.status(400).json({message: err.message}));
 });
 
-app.listen(4000, ()=>{
-    console.log('Server is running.');
+app.put('/users/:id',(req,res) => {
+    const userID = req.params.id;
+    const updateData = {
+        name: req.body.name,
+        email: req.body.email,
+        password: req.body.password
+    };
+
+    User.findByIdAndUpdate(userID,updateData,{new : true})
+        .then(updatedUser => {
+            if(!updatedUser) {
+                return res.status(404).json({message: 'User not found'});
+            }
+            res.json(updatedUser);
+        })
+        .catch(err => res.status(400).json({message: err.message}));
 });
 
-                                                
+
+app.delete("/users/:id", (req,res)=>{
+    const userID = req.params.id;
+
+    User.findByIdAndDelete(userID)
+        .then(deleteUser => {
+            if(!deleteUser) {
+                return req.status(404).json({message: 'User not found'});
+            }
+            res.json({message: 'User deleted successfully'});
+        })
+        .catch(err => res.status(400).json({message: err.message}));
+});
+
+
+app.listen(port, ()=>console.log('Server is live'));
